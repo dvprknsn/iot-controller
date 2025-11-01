@@ -13,3 +13,18 @@ def toggle(name):
     url = f"http://{ip}/cm?cmnd=Power%20TOGGLE"
     resp = requests.get(url)
     resp.close()
+    
+def get_state(name):
+    ip = PLUGS.get(name)
+    if not ip:
+        return "UNKNOWN"
+    try:
+        url = f"http://{ip}/cm?cmnd=Power"
+        resp = requests.get(url)
+        data = resp.json()
+        resp.close()
+        return data.get("POWER", "UNKNOWN")
+    except Exception:
+        return "UNKNOWN"
+
+
