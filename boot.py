@@ -1,10 +1,8 @@
-#boot.py
 from network import WLAN, STA_IF
 import time
 import serve
-import creds
-ssid = creds.wifi_creds[0]
-password = creds.wifi_creds[1]
+from creds import SSID, PASSWORD
+
 def connect_wifi(ssid, password,hostname="control"):
     wlan = WLAN(STA_IF)
     wlan.active(True)
@@ -19,7 +17,7 @@ def connect_wifi(ssid, password,hostname="control"):
     print("Connected.", wlan.config("hostname"))
     print("Network config:", wlan.ifconfig())
     return wlan
-connect_wifi(ssid, password)
+connect_wifi(SSID, PASSWORD)
 
 
 serve.serve()

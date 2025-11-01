@@ -1,7 +1,3 @@
-# serve.py
-# micropython to serve a simple html webpage 
-# for tasmota plug toggling
-
 import socket
 import plugs
 
@@ -55,4 +51,3 @@ def serve():
             cl.send(HTML)
 
         cl.close()
-

@@ -13,4 +13,3 @@ def toggle(name):
     url = f"http://{ip}/cm?cmnd=Power%20TOGGLE"
     resp = requests.get(url)
     resp.close()
-
