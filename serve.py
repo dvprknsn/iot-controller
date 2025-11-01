@@ -57,8 +57,12 @@ def serve(port=80):
             except Exception as e:
                 print("Toggle error:", e)
 
-        html = render_page()
+        
+            cl.send("HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n")
+            cl.close()
+            continue
 
+        html = render_page()
         cl.send("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n")
         cl.send(html)
         cl.close()
