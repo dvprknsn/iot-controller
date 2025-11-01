@@ -1,15 +1,8 @@
 import socket
 import tasmota
-
-# IPs of Tasmota devices
-PLUG_IPS = [
-    "192.168.68.91",
-    "192.168.68.92"
-]
-
+from ip_addr import PLUG_IPS
 def render_page():
     body = "<h2>Local Plug Control</h2><ul>"
-
     for ip in PLUG_IPS:
         name = tasmota.get_name(ip)
         state = tasmota.get_power_state(ip)
@@ -23,7 +16,7 @@ def render_page():
             "</li>"
         )
 
-    body += "</ul>"
+    body += '</ul><p><a href="/refresh">[Refresh Devices]</a></p>'
     return f"""\
 <!DOCTYPE html>
 <html>
@@ -48,6 +41,12 @@ def serve(port=80):
         req = cl.recv(1024).decode()
         print("Request from", addr)
         print(req)
+        if "GET /refresh" in req:
+            print("Cache refresh requested")
+            tasmota.DEVICE_INFO.clear()  # Wipe all cached data
+            cl.send("HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n")
+            cl.close()
+            continue
 
         if "GET /toggle" in req:
             try:

@@ -1,1 +1,4 @@
-# Empty for now
+#main.py
+import serve
+
+serve.serve()
