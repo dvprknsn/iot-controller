@@ -1,6 +1,9 @@
 # Credential files
 creds.py
 ip_addr.py
+# Micropython binaries
+*.bin
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

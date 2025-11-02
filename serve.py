@@ -1,68 +1,65 @@
-import socket
-import tasmota
-from ip_addr import PLUG_IPS
-def render_page():
-    body = "<h2>Local Plug Control</h2><ul>"
-    for ip in PLUG_IPS:
-        name = tasmota.get_name(ip)
-        state = tasmota.get_power_state(ip)
-        color = "green" if state == "ON" else "red"
+#tasmota.py
+import requests
+import ujson
+import re
 
-        body += (
-            "<li>"
-            f"<strong>{name}</strong> &nbsp; "
-            f"<span style='color:{color}'>{state}</span> &nbsp; "
-            f"<a href='/toggle?ip={ip}'>[Toggle]</a>"
-            "</li>"
-        )
+DEVICE_INFO = {}  # Cache: ip -> {"name": str, "state": str}
 
-    body += '</ul><p><a href="/refresh">[Refresh Devices]</a></p>'
-    return f"""\
-<!DOCTYPE html>
-<html>
-<head>
-<title>ESP Plug Control</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-</head>
-<body>{body}</body>
-</html>"""
-
-
-def serve(port=80):
-    addr = socket.getaddrinfo('0.0.0.0', port)[0][-1]
-    s = socket.socket()
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(addr)
-    s.listen(2)
-    print("Server running at :", addr)
-
-    while True:
-        cl, addr = s.accept()
-        req = cl.recv(1024).decode()
-        print("Request from", addr)
-        print(req)
-        if "GET /refresh" in req:
-            print("Cache refresh requested")
-            tasmota.DEVICE_INFO.clear()  # Wipe all cached data
-            cl.send("HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n")
-            cl.close()
-            continue
-
-        if "GET /toggle" in req:
-            try:
-                ip = req.split("ip=")[1].split()[0]
-                print("Toggle request for", ip)
-                tasmota.toggle(ip)
-            except Exception as e:
-                print("Toggle error:", e)
-
+def get_name(ip):
+    """Return cached or freshly retrieved Tasmota DeviceName."""
+    if ip in DEVICE_INFO and "name" in DEVICE_INFO[ip]:
+        return DEVICE_INFO[ip]["name"]
+    
+    try:
+        url = "http://%s/cm?cmnd=DeviceName" % ip
+        r = requests.get(url, timeout=2)
+        text = r.text
+        r.close()
         
-            cl.send("HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n")
-            cl.close()
-            continue
+        # Try to parse JSON normally first
+        try:
+            data = ujson.loads(text)
+            name = data.get("DeviceName", ip)
+        except:
+            # If JSON parsing fails, extract DeviceName manually
+            match = re.search(r'"DeviceName":"([^"]+)"', text)
+            name = match.group(1) if match else "Unknown (%s)" % ip
+    except:
+        name = "Unknown (%s)" % ip
+    
+    DEVICE_INFO.setdefault(ip, {})["name"] = name
+    return name
 
-        html = render_page()
-        cl.send("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n")
-        cl.send(html)
-        cl.close()
+def get_power_state(ip):
+    """Return ON, OFF, or PENDING"""
+    pending = DEVICE_INFO.get(ip, {}).get("pending", False)
+    try:
+        url = "http://%s/cm?cmnd=Power" % ip
+        r = requests.get(url, timeout=2)
+        text = r.text
+        r.close()
+        
+        # Extract POWER value directly
+        match = re.search(r'"POWER":"(ON|OFF)"', text)
+        state = match.group(1) if match else "UNKNOWN"
+    except:
+        state = "UNKNOWN"
+        
+    if pending and state in ("ON", "OFF"):
+        DEVICE_INFO[ip]["pending"] = False
+        
+    DEVICE_INFO.setdefault(ip, {})["state"] = state
+    return "PENDING" if pending else state
+
+def set_power(ip, state):
+    """State: ON or OFF"""
+    url = "http://%s/cm?cmnd=Power%%20%s" % (ip, state)
+    try:
+        r = requests.get(url, timeout=2)
+        r.close()
+        DEVICE_INFO.setdefault(ip, {})["pending"] = True
+        return True
+    except:
+        return False
+
 
