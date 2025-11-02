@@ -1,2 +1,3 @@
 #creds.py
-wifi_creds = ["ssid_here","password_here"]
+SSID = "ssid_here"
+PASSWORD ="password_here"

@@ -1,53 +1,65 @@
-import socket
-import plugs
+#tasmota.py
+import requests
+import ujson
+import re
 
-HTML = """
-<!DOCTYPE html>
-<html>
-<head><title>Control</title></head>
-<body>
-<h1>Plug Control</h1>
-<a href="/do?plug=one&action=toggle">
-    <button>Toggle PLUG ONE</button>
-</a>
-<a href="/do?plug=two&action=toggle">
-    <button>Toggle PLUG TWO</button>
-</a>
-</body></html>
-"""
+DEVICE_INFO = {}  # Cache: ip -> {"name": str, "state": str}
 
-def serve():
-    s = socket.socket()
-    s.bind(('', 80))
-    s.listen(5)
-    print("Server started on port 80...")
+def get_name(ip):
+    """Return cached or freshly retrieved Tasmota DeviceName."""
+    if ip in DEVICE_INFO and "name" in DEVICE_INFO[ip]:
+        return DEVICE_INFO[ip]["name"]
+    
+    try:
+        url = "http://%s/cm?cmnd=DeviceName" % ip
+        r = requests.get(url, timeout=2)
+        text = r.text
+        r.close()
+        
+        # Try to parse JSON normally first
+        try:
+            data = ujson.loads(text)
+            name = data.get("DeviceName", ip)
+        except:
+            # If JSON parsing fails, extract DeviceName manually
+            match = re.search(r'"DeviceName":"([^"]+)"', text)
+            name = match.group(1) if match else "Unknown (%s)" % ip
+    except:
+        name = "Unknown (%s)" % ip
+    
+    DEVICE_INFO.setdefault(ip, {})["name"] = name
+    return name
 
-    while True:
-        cl, addr = s.accept()
-        request = cl.recv(1024).decode()
-        print("Request:", request)
+def get_power_state(ip):
+    """Return ON, OFF, or PENDING"""
+    pending = DEVICE_INFO.get(ip, {}).get("pending", False)
+    try:
+        url = "http://%s/cm?cmnd=Power" % ip
+        r = requests.get(url, timeout=2)
+        text = r.text
+        r.close()
+        
+        # Extract POWER value directly
+        match = re.search(r'"POWER":"(ON|OFF)"', text)
+        state = match.group(1) if match else "UNKNOWN"
+    except:
+        state = "UNKNOWN"
+        
+    if pending and state in ("ON", "OFF"):
+        DEVICE_INFO[ip]["pending"] = False
+        
+    DEVICE_INFO.setdefault(ip, {})["state"] = state
+    return "PENDING" if pending else state
 
-        # Parse route
-        if "GET /do?" in request:
-            try:
-                # Naive parameter parsing:
-                path = request.split(" ")[1]
-                params = path.split("?")[1]
-                pairs = dict(p.split("=") for p in params.split("&"))
-                plug = pairs.get("plug")
-                action = pairs.get("action")
+def set_power(ip, state):
+    """State: ON or OFF"""
+    url = "http://%s/cm?cmnd=Power%%20%s" % (ip, state)
+    try:
+        r = requests.get(url, timeout=2)
+        r.close()
+        DEVICE_INFO.setdefault(ip, {})["pending"] = True
+        return True
+    except:
+        return False
 
-                if action == "toggle":
-                    plugs.toggle(plug)
 
-                # Redirect to the safe main page:
-                cl.send("HTTP/1.1 302 Found\r\nLocation: /\r\n\r\n")
-            except Exception as e:
-                print("Error:", e)
-                cl.send("HTTP/1.1 500 Internal Error\r\n\r\n")
-
-        else:
-            cl.send('HTTP/1.1 200 OK\r\nContent-type: text/html\r\n\r\n')
-            cl.send(HTML)
-
-        cl.close()
