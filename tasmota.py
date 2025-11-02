@@ -26,7 +26,9 @@ def get_name(ip):
     return name
 
 def get_power_state(ip):
-    """Return ON, OFF, or UNKNOWN"""
+    """Return ON, OFF, or PENDING"""
+    pending = DEVICE_INFO.get(ip, {}).get("pending", False)
+
     try:
         url = "http://%s/cm?cmnd=Power" % ip
         r = requests.get(url, timeout=2)
@@ -37,14 +39,28 @@ def get_power_state(ip):
         state = match.group(1) if match else "UNKNOWN"
     except:
         state = "UNKNOWN"
+    if pending and state in ("ON", "OFF"):
+        DEVICE_INFO[ip]["pending"] = False
     DEVICE_INFO.setdefault(ip, {})["state"] = state
-    return state
+    return "PENDING" if pending else state
 
-def toggle(ip):
-    """Toggle power state."""
-    url = "http://%s/cm?cmnd=Power%%20TOGGLE" % ip
+def set_power(ip, state):
+    """State: ON or OFF"""
+    url = "http://%s/cm?cmnd=Power%%20%s" % (ip, state)
     try:
         r = requests.get(url, timeout=2)
         r.close()
+        DEVICE_INFO.setdefault(ip, {})["pending"] = True
         return True
-    except: return False
+    except:
+        return False
+
+
+#def toggle(ip):
+#    """Toggle power state."""
+#     url = "http://%s/cm?cmnd=Power%%20TOGGLE" % ip
+#     try:
+#         r = requests.get(url, timeout=2)
+#         r.close()
+#         return True
+#     except: return False
