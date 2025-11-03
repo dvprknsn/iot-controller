@@ -1,6 +1,7 @@
 #wifi_connect.py
 from network import WLAN, STA_IF
 import time
+from creds import SSID, PASSWORD
 
 def connect_wifi(ssid, password,hostname="control"):
     wlan = WLAN(STA_IF)
@@ -16,3 +17,5 @@ def connect_wifi(ssid, password,hostname="control"):
     print("Connected.", wlan.config("hostname"))
     print("Network config:", wlan.ifconfig())
     return wlan
+
+connect_wifi(SSID, PASSWORD)
